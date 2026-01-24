@@ -1,4 +1,4 @@
-﻿#include <iostream>
+#include <iostream>
 #include <vector>
 #include <string>
 #include <fstream>
@@ -14,6 +14,21 @@ const std::string CYAN = "\033[36m";
 const std::string BOLD = "\033[1m";
 
 enum class Priority { Low, Medium, High };
+
+
+std::string trim(const std::string& str) {
+    size_t first = str.find_first_not_of(" \t\r\n");
+    if (std::string::npos == first) return "";
+    size_t last = str.find_last_not_of(" \t\r\n");
+    return str.substr(first, (last - first + 1));
+}
+
+std::string toLower(const std::string& str) {
+    std::string data = str;
+    std::transform(data.begin(), data.end(), data.begin(),
+        [](unsigned char c) { return std::tolower(c); });
+    return data;
+}
 
 struct Task {
     int id;
@@ -44,9 +59,10 @@ private:
             bool completed;
             std::string description;
 
-            iss >> id >> prioInt >> completed;
+            if (!(iss >> id >> prioInt >> completed)) continue; 
+
             std::getline(iss, description);
-            if (description.size() > 1) description = description.substr(1); // remove leading space
+            description = trim(description); 
 
             Priority prio = static_cast<Priority>(prioInt);
             tasks.emplace_back(id, description, prio);
@@ -54,6 +70,7 @@ private:
         }
 
         if (!tasks.empty()) {
+         
             nextId = std::max_element(tasks.begin(), tasks.end(),
                 [](const Task& a, const Task& b) { return a.id < b.id; })->id + 1;
         }
@@ -62,6 +79,7 @@ private:
     void save() const {
         std::ofstream file(filename);
         for (const auto& t : tasks) {
+            
             file << t.id << " " << static_cast<int>(t.priority) << " "
                 << t.completed << " " << t.description << "\n";
         }
@@ -81,11 +99,12 @@ public:
     ~TaskManager() { save(); }
 
     void add(const std::string& desc, Priority prio = Priority::Medium) {
-        if (desc.empty()) {
+        std::string cleanDesc = trim(desc);
+        if (cleanDesc.empty()) {
             std::cout << RED << "Error: Task description cannot be empty!\n" << RESET;
             return;
         }
-        tasks.emplace_back(nextId++, desc, prio);
+        tasks.emplace_back(nextId++, cleanDesc, prio);
         std::cout << GREEN << "Task added successfully (ID: " << nextId - 1 << ")\n" << RESET;
     }
 
@@ -97,7 +116,7 @@ public:
 
         std::cout << BOLD << CYAN << "\n=== Task List ===\n" << RESET;
         for (const auto& t : tasks) {
-            std::string status = t.completed ? GREEN + "✓" + RESET : RED + "✗" + RESET;
+            std::string status = t.completed ? GREEN + "\u2713" + RESET : RED + "\u2717" + RESET; 
             std::cout << status << " [" << t.id << "] " << t.description
                 << "  (Priority: " << priorityColor(t.priority) << ")\n";
         }
@@ -129,38 +148,42 @@ public:
     }
 
     void search(const std::string& keyword) const {
-        if (keyword.empty()) return;
-        std::string lowerKeyword = keyword;
-        std::transform(lowerKeyword.begin(), lowerKeyword.end(), lowerKeyword.begin(), ::tolower);
+        std::string cleanKeyword = trim(keyword);
+        if (cleanKeyword.empty()) return;
+
+        std::string lowerKeyword = toLower(cleanKeyword);
 
         bool found = false;
+        std::cout << BOLD << CYAN << "\n=== Search Results ===\n" << RESET;
         for (const auto& t : tasks) {
-            std::string descLower = t.description;
-            std::transform(descLower.begin(), descLower.end(), descLower.begin(), ::tolower);
+            std::string descLower = toLower(t.description);
             if (descLower.find(lowerKeyword) != std::string::npos) {
-                std::string status = t.completed ? GREEN + "✓" + RESET : RED + "✗" + RESET;
+                std::string status = t.completed ? GREEN + "\u2713" + RESET : RED + "\u2717" + RESET;
                 std::cout << status << " [" << t.id << "] " << t.description
                     << "  (Priority: " << priorityColor(t.priority) << ")\n";
                 found = true;
             }
         }
         if (!found) std::cout << YELLOW << "No tasks found matching your search.\n" << RESET;
+        std::cout << "\n";
     }
 };
 
 void showHelp() {
     std::cout << BOLD << CYAN << "\nAvailable Commands:\n" << RESET;
-    std::cout << "  add <task description>                  → Add a new task\n";
-    std::cout << "  add <task> high|medium|low              → Add with priority\n";
-    std::cout << "  list                                    → Show all tasks\n";
-    std::cout << "  done <id>                               → Mark task as completed\n";
-    std::cout << "  delete <id>                             → Delete a task\n";
-    std::cout << "  search <keyword>                        → Search in task descriptions\n";
-    std::cout << "  help                                    → Show this help\n";
-    std::cout << "  exit                                    → Quit the application\n\n";
+    std::cout << "  add <description>            -> Add a new task\n";
+    std::cout << "  add <description> high/low   -> Add with priority\n";
+    std::cout << "  list                         -> Show all tasks\n";
+    std::cout << "  done <id>                    -> Mark task as completed\n";
+    std::cout << "  delete <id>                  -> Delete a task\n";
+    std::cout << "  search <keyword>             -> Search in task descriptions\n";
+    std::cout << "  help                         -> Show this help\n";
+    std::cout << "  exit                         -> Quit the application\n\n";
 }
 
 int main() {
+    
+
     TaskManager manager;
     std::string input;
 
@@ -169,13 +192,16 @@ int main() {
 
     while (true) {
         std::cout << BOLD << "> " << RESET;
-        std::getline(std::cin, input);
+        if (!std::getline(std::cin, input)) break; // EOF kontrolü
 
         if (input.empty()) continue;
 
         std::istringstream iss(input);
         std::string command;
         iss >> command;
+
+        // Komutu küçük harfe çevirerek işlem yap (Böylece List, LIST, list hepsi çalışır)
+        command = toLower(command);
 
         if (command == "exit" || command == "quit") {
             std::cout << YELLOW << "Goodbye!\n" << RESET;
@@ -190,53 +216,74 @@ int main() {
         else if (command == "add") {
             std::string rest;
             std::getline(iss, rest);
-            if (rest.empty()) {
+
+            std::string cleanRest = trim(rest);
+
+            if (cleanRest.empty()) {
                 std::cout << RED << "Error: Please provide a task description.\n" << RESET;
                 continue;
             }
 
-            std::string desc = rest;
+            std::string desc = cleanRest;
             Priority prio = Priority::Medium;
-            std::string lastWord;
-            std::istringstream temp(rest);
-            while (temp >> lastWord); // get last word
 
-            if (lastWord == "high" || lastWord == "High") {
-                prio = Priority::High;
-                desc = rest.substr(0, rest.rfind(lastWord));
-                while (!desc.empty() && std::isspace(desc.back())) desc.pop_back();
-            }
-            else if (lastWord == "medium" || lastWord == "Medium") {
-                prio = Priority::Medium;
-                desc = rest.substr(0, rest.rfind(lastWord));
-                while (!desc.empty() && std::isspace(desc.back())) desc.pop_back();
-            }
-            else if (lastWord == "low" || lastWord == "Low") {
-                prio = Priority::Low;
-                desc = rest.substr(0, rest.rfind(lastWord));
-                while (!desc.empty() && std::isspace(desc.back())) desc.pop_back();
+            
+            std::istringstream temp(cleanRest);
+            std::vector<std::string> words;
+            std::string w;
+            while (temp >> w) words.push_back(w);
+
+            if (!words.empty()) {
+                std::string lastWord = toLower(words.back());
+                bool priorityFound = false;
+
+                if (lastWord == "high") {
+                    prio = Priority::High;
+                    priorityFound = true;
+                }
+                else if (lastWord == "medium") {
+                    prio = Priority::Medium;
+                    priorityFound = true;
+                }
+                else if (lastWord == "low") {
+                    prio = Priority::Low;
+                    priorityFound = true;
+                }
+
+                if (priorityFound) {
+                 
+                    if (cleanRest.length() >= words.back().length()) {
+                        desc = cleanRest.substr(0, cleanRest.length() - words.back().length());
+                        desc = trim(desc);
+                    }
+                }
             }
 
-            manager.add(desc, prio);
+            
+            if (desc.empty()) {
+                std::cout << RED << "Error: Please provide a task description before priority.\n" << RESET;
+            }
+            else {
+                manager.add(desc, prio);
+            }
         }
         else if (command == "done" || command == "complete") {
             int id;
             if (iss >> id) manager.complete(id);
-            else std::cout << RED << "Error: Please provide a task ID.\n" << RESET;
+            else std::cout << RED << "Error: Please provide a valid task ID.\n" << RESET;
         }
-        else if (command == "delete" || command == "del") {
+        else if (command == "delete" || command == "del" || command == "remove") {
             int id;
             if (iss >> id) manager.remove(id);
-            else std::cout << RED << "Error: Please provide a task ID.\n" << RESET;
+            else std::cout << RED << "Error: Please provide a valid task ID.\n" << RESET;
         }
         else if (command == "search") {
             std::string keyword;
             std::getline(iss, keyword);
-            if (!keyword.empty()) manager.search(keyword);
-            else std::cout << RED << "Error: Please provide a search keyword.\n" << RESET;
+            manager.search(keyword); 
         }
         else {
-            std::cout << RED << "Unknown command: " << command << "\nType 'help' for available commands.\n" << RESET;
+            std::cout << RED << "Unknown command. Type 'help' for available commands.\n" << RESET;
         }
     }
 
