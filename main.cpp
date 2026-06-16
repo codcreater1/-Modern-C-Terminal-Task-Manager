@@ -7,7 +7,7 @@
 #include <cctype>
 #include <limits>
 
-// Terminal Renk Kodları
+// Terminal Renk Kodları Burada
 const std::string RESET  = "\033[0m";
 const std::string RED    = "\033[31m";
 const std::string GREEN  = "\033[32m";
